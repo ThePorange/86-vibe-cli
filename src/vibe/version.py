@@ -1,0 +1,6 @@
+"""Platform version metadata."""
+
+PLATFORM_NAME = "86-vibe"
+PLATFORM_VERSION = "0.1.0"
+ARCHITECTURE_BASELINE = "AP-002-0.1.0"
+BUILD_IDENTIFIER = "dev"
