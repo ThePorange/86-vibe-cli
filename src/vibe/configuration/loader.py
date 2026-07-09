@@ -30,6 +30,7 @@ def load_defaults() -> dict[str, Any]:
             "console": True,
             "file": True,
             "debug": False,
+            "rotation": True,
         },
         "governance": {
             "require_human_approval": True,

@@ -57,7 +57,7 @@ def validate_configuration(config: dict[str, Any]) -> None:
         logging_config = _require_mapping(config, "logging")
         if "level" in logging_config:
             _validate_logging_level(logging_config, "level")
-        for key in ("console", "file", "debug"):
+        for key in ("console", "file", "debug", "rotation"):
             if key in logging_config:
                 _validate_bool(logging_config, key)
 
