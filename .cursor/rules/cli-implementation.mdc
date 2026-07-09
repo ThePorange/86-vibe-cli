@@ -1,0 +1,38 @@
+---
+description: 86-vibe CLI implementation conventions
+globs: src/**/*.py,tests/**/*.py,pyproject.toml
+alwaysApply: false
+---
+
+# 86-vibe CLI Implementation
+
+This repository is the **only** home for platform service and CLI implementation code.
+
+## Layout
+
+- Package root: `src/vibe/`
+- Installed command: `86vibe`
+- Distribution name: `vibe-cli`; import package: `vibe`
+- Tests: `tests/`
+
+## Standards
+
+- Conform to ARP/AEP documents in `86-vibe-platform/architecture/`.
+- Follow ARP-001-05 Python engineering standards.
+- Match existing package structure, naming, and import style before adding new modules.
+- Add tests for new behavior; run `pytest` from this repo root.
+
+## Boundaries
+
+- Do not add architecture documents here — those belong in `86-vibe-platform`.
+- Do not add reference example projects here — those belong in `86-vibe-example`.
+- Service public interfaces must match the ARP-002 contracts for each service.
+
+## Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
+86vibe version
+```
