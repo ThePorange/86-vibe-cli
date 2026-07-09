@@ -5,3 +5,12 @@ __pycache__/
 *.egg-info/
 .DS_Store
 *.zip
+
+# Logs
+logs/
+*.log
+*.logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
