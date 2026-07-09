@@ -50,7 +50,7 @@ def main_callback(ctx: typer.Context) -> None:
     """Initialize platform services before command execution."""
     if ctx.invoked_subcommand is None:
         return
-  # Bootstrap is performed lazily by CLIApplication for implemented commands.
+    # Bootstrap is performed lazily by CLIApplication for implemented commands.
 
 
 class CLIApplication:
