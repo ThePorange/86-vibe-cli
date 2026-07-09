@@ -74,7 +74,9 @@ class PlatformLogger:
     def _format_message(self, message: str, fields: dict[str, Any]) -> str:
         if not fields:
             return message
-        rendered = ", ".join(f"{key}={self._redact_value(key, value)}" for key, value in fields.items())
+        rendered = ", ".join(
+            f"{key}={self._redact_value(key, value)}" for key, value in fields.items()
+        )
         return f"{message} ({rendered})"
 
     @staticmethod
