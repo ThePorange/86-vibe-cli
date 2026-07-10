@@ -26,10 +26,12 @@ from vibe.registry import (
     SERVICE_NAME_CONFIGURATION,
     SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
+    SERVICE_NAME_REPOSITORY,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
 from vibe.registry.metadata import ServiceMetadata
 from vibe.registry.service import ServiceRegistry
+from vibe.repository.service import RepositoryService
 from vibe.version import PLATFORM_VERSION
 
 
@@ -66,6 +68,11 @@ class BootstrapService:
         )
         self._logging_service = logging_service or LoggingService(
             self._configuration_service,
+            project_root=self._project_root,
+        )
+        self._repository_service = RepositoryService(
+            self._configuration_service,
+            self._logging_service,
             project_root=self._project_root,
         )
         self._lifecycle_manager = lifecycle_manager
@@ -304,6 +311,17 @@ class BootstrapService:
             raise BootstrapStateError("Service Lifecycle Manager is unavailable.")
         return self._lifecycle_manager
 
+    @property
+    def repository_service(self) -> RepositoryService:
+        """Return the managed repository service.
+
+        Raises:
+            BootstrapStateError:
+                When accessed before bootstrap has reached the running state.
+        """
+        self._require_running("Repository Service")
+        return self._repository_service
+
     def _require_running(self, service_name: str) -> None:
         with self._lock:
             if self._state != BootstrapState.RUNNING:
@@ -380,6 +398,18 @@ class BootstrapService:
                 dependencies=(SERVICE_NAME_CONFIGURATION,),
             ),
         )
+        registry.register(
+            SERVICE_NAME_REPOSITORY,
+            self._repository_service,
+            ServiceMetadata(
+                name=SERVICE_NAME_REPOSITORY,
+                service_type="RepositoryService",
+                package="vibe.repository",
+                version=PLATFORM_VERSION,
+                description="Platform repository access",
+                dependencies=(SERVICE_NAME_CONFIGURATION, SERVICE_NAME_LOGGING),
+            ),
+        )
 
     def _initialize_lifecycle_manager(self) -> None:
         if self._lifecycle_manager is None:
@@ -409,7 +439,9 @@ class BootstrapService:
             ),
         )
         self._register_managed_services()
-        self._mark_managed_services_ready()
+        self._mark_core_services_ready()
+        self._initialize_repository_service()
+        self._mark_remaining_services_ready()
 
     def _register_managed_services(self) -> None:
         manager = self._lifecycle_manager
@@ -442,6 +474,15 @@ class BootstrapService:
             ),
         )
         manager.register(
+            self._repository_service,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_REPOSITORY,
+                name="Repository Service",
+                version=PLATFORM_VERSION,
+                required_dependencies=(SERVICE_NAME_CONFIGURATION, SERVICE_NAME_LOGGING),
+            ),
+        )
+        manager.register(
             self,
             LifecycleServiceMetadata(
                 service_id=SERVICE_NAME_BOOTSTRAP,
@@ -465,7 +506,24 @@ class BootstrapService:
             ),
         )
 
-    def _mark_managed_services_ready(self) -> None:
+    def _initialize_repository_service(self) -> None:
+        manager = self._lifecycle_manager
+        if manager is None:
+            raise BootstrapInitializationError("Lifecycle manager is unavailable.")
+
+        manager.transition(SERVICE_NAME_REPOSITORY, ServiceLifecycleState.INITIALIZING)
+        try:
+            self._repository_service.initialize()
+        except Exception:
+            manager.transition(
+                SERVICE_NAME_REPOSITORY,
+                ServiceLifecycleState.FAILED,
+                message="Repository service initialization failed",
+            )
+            return
+        manager.transition(SERVICE_NAME_REPOSITORY, ServiceLifecycleState.READY)
+
+    def _mark_core_services_ready(self) -> None:
         manager = self._lifecycle_manager
         if manager is None:
             raise BootstrapInitializationError("Lifecycle manager is unavailable.")
@@ -474,10 +532,23 @@ class BootstrapService:
             SERVICE_NAME_CONFIGURATION,
             SERVICE_NAME_SERVICE_REGISTRY,
             SERVICE_NAME_LOGGING,
+        ):
+            manager.transition(service_id, ServiceLifecycleState.READY)
+
+    def _mark_remaining_services_ready(self) -> None:
+        manager = self._lifecycle_manager
+        if manager is None:
+            raise BootstrapInitializationError("Lifecycle manager is unavailable.")
+
+        for service_id in (
             SERVICE_NAME_BOOTSTRAP,
             SERVICE_NAME_LIFECYCLE_MANAGER,
         ):
             manager.transition(service_id, ServiceLifecycleState.READY)
+
+        repository_record = manager.get_service(SERVICE_NAME_REPOSITORY)
+        if repository_record.state == ServiceLifecycleState.INITIALIZING:
+            manager.transition(SERVICE_NAME_REPOSITORY, ServiceLifecycleState.READY)
 
     def _emit_startup_diagnostics(self) -> None:
         logger = self._logging_service.get_logger("bootstrap")

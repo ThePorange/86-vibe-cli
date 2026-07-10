@@ -22,7 +22,13 @@ def load_defaults() -> dict[str, Any]:
     """Return built-in platform default configuration."""
     return {
         "platform": {"name": "86-vibe"},
-        "repository": {"type": "platform", "authoritative": True},
+        "repository": {
+            "type": "platform",
+            "authoritative": True,
+            "read_only": False,
+            "include_hidden": False,
+            "include_ignored": False,
+        },
         "ai": {"provider": "openrouter", "default_model": "anthropic/claude-opus-4"},
         "mcp": {"enabled": True},
         "logging": {

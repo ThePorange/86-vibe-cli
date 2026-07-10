@@ -27,6 +27,18 @@ from vibe.lifecycle.exceptions import (
 )
 from vibe.logging.exceptions import LoggingServiceError
 from vibe.registry.exceptions import ServiceNotFoundError, ServiceRegistryError
+from vibe.repository.errors import (
+    ArtifactNotFoundError,
+    InvalidRepositoryError,
+    InvalidRepositoryPathError,
+    ReadFailureError,
+    RepositoryAccessDeniedError,
+    RepositoryError,
+    RepositoryFailureError,
+    RepositoryNotFoundError,
+    RepositoryNotInitializedError,
+    WriteFailureError,
+)
 
 
 class CLIErrorCategory(enum.Enum):
@@ -244,6 +256,45 @@ def map_exception(
         return CLIErrorResult(
             category=CLIErrorCategory.RUNTIME_ERROR,
             exit_code=ExitCode.RUNTIME_FAILURE,
+            message=str(exc),
+            correlation_id=correlation_id,
+        )
+
+    if isinstance(exc, (RepositoryNotFoundError, InvalidRepositoryError)):
+        return CLIErrorResult(
+            category=CLIErrorCategory.REPO_ERROR,
+            exit_code=ExitCode.VALIDATION_FAILURE,
+            message=str(exc),
+            correlation_id=correlation_id,
+        )
+
+    if isinstance(
+        exc,
+        (
+            ArtifactNotFoundError,
+            InvalidRepositoryPathError,
+            RepositoryNotInitializedError,
+        ),
+    ):
+        return CLIErrorResult(
+            category=CLIErrorCategory.REPO_ERROR,
+            exit_code=ExitCode.RUNTIME_FAILURE,
+            message=str(exc),
+            correlation_id=correlation_id,
+        )
+
+    if isinstance(exc, (RepositoryAccessDeniedError, ReadFailureError, WriteFailureError)):
+        return CLIErrorResult(
+            category=CLIErrorCategory.REPO_ERROR,
+            exit_code=ExitCode.RUNTIME_FAILURE,
+            message=str(exc),
+            correlation_id=correlation_id,
+        )
+
+    if isinstance(exc, (RepositoryFailureError, RepositoryError)):
+        return CLIErrorResult(
+            category=CLIErrorCategory.REPO_ERROR,
+            exit_code=ExitCode.INTERNAL_PLATFORM_ERROR,
             message=str(exc),
             correlation_id=correlation_id,
         )

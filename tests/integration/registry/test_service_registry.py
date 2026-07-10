@@ -12,6 +12,7 @@ from vibe.registry import (
     SERVICE_NAME_CONFIGURATION,
     SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
+    SERVICE_NAME_REPOSITORY,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
 from vibe.registry.exceptions import DuplicateServiceRegistrationError
@@ -24,9 +25,10 @@ def test_bootstrap_registers_platform_services(tmp_path: Path) -> None:
     result = service.initialize()
 
     registry = result.service_registry
-    assert registry.count == 5
+    assert registry.count == 6
     assert registry.get(SERVICE_NAME_CONFIGURATION) is service.configuration_service
     assert registry.get(SERVICE_NAME_LOGGING) is service.logging_service
+    assert registry.get(SERVICE_NAME_REPOSITORY) is service.repository_service
     assert registry.get(SERVICE_NAME_BOOTSTRAP) is service
     assert registry.get(SERVICE_NAME_SERVICE_REGISTRY) is registry
     service.shutdown()
@@ -43,6 +45,7 @@ def test_registry_enumeration_after_bootstrap(tmp_path: Path) -> None:
         SERVICE_NAME_CONFIGURATION,
         SERVICE_NAME_LIFECYCLE_MANAGER,
         SERVICE_NAME_LOGGING,
+        SERVICE_NAME_REPOSITORY,
         SERVICE_NAME_SERVICE_REGISTRY,
     )
     service.shutdown()
@@ -78,7 +81,7 @@ def test_registry_state_after_shutdown(tmp_path: Path) -> None:
     registry = service.service_registry
     service.shutdown()
 
-    assert registry.count == 5
+    assert registry.count == 6
     assert registry.contains(SERVICE_NAME_BOOTSTRAP) is True
 
 

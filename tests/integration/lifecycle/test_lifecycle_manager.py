@@ -11,6 +11,7 @@ from vibe.registry import (
     SERVICE_NAME_CONFIGURATION,
     SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
+    SERVICE_NAME_REPOSITORY,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
 
@@ -37,9 +38,22 @@ def test_lifecycle_manager_registers_platform_services(tmp_path: Path) -> None:
         SERVICE_NAME_CONFIGURATION,
         SERVICE_NAME_LIFECYCLE_MANAGER,
         SERVICE_NAME_LOGGING,
+        SERVICE_NAME_REPOSITORY,
         SERVICE_NAME_SERVICE_REGISTRY,
     )
-    assert all(record.state == ServiceLifecycleState.READY for record in manager.list_services())
+    states = {record.metadata.service_id: record.state for record in manager.list_services()}
+    for service_id in (
+        SERVICE_NAME_BOOTSTRAP,
+        SERVICE_NAME_CONFIGURATION,
+        SERVICE_NAME_LIFECYCLE_MANAGER,
+        SERVICE_NAME_LOGGING,
+        SERVICE_NAME_SERVICE_REGISTRY,
+    ):
+        assert states[service_id] == ServiceLifecycleState.READY
+    assert states[SERVICE_NAME_REPOSITORY] in {
+        ServiceLifecycleState.READY,
+        ServiceLifecycleState.FAILED,
+    }
     service.shutdown()
 
 
@@ -53,15 +67,15 @@ def test_registry_contains_lifecycle_manager(tmp_path: Path) -> None:
     service.shutdown()
 
 
-def test_platform_status_ready_after_bootstrap(tmp_path: Path) -> None:
-    """Platform lifecycle status is READY after bootstrap."""
-    service = BootstrapService(project_root=tmp_path)
+def test_platform_status_ready_after_bootstrap(cli_repo: Path) -> None:
+    """Platform lifecycle status is READY after bootstrap with a valid repository."""
+    service = BootstrapService(project_root=cli_repo)
     service.initialize()
 
     status = service.lifecycle_manager.status()
     assert status.state == PlatformState.READY
-    assert status.service_count == 5
-    assert status.ready_services == 5
+    assert status.service_count == 6
+    assert status.ready_services == 6
     service.shutdown()
 
 

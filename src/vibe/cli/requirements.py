@@ -8,6 +8,7 @@ from vibe.registry import (
     SERVICE_NAME_CONFIGURATION,
     SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
+    SERVICE_NAME_REPOSITORY,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
 
@@ -17,6 +18,8 @@ FRAMEWORK_SERVICES: tuple[str, ...] = (
     SERVICE_NAME_SERVICE_REGISTRY,
     SERVICE_NAME_LIFECYCLE_MANAGER,
 )
+
+REPOSITORY_SERVICES: tuple[str, ...] = FRAMEWORK_SERVICES + (SERVICE_NAME_REPOSITORY,)
 
 
 @dataclass(frozen=True)
@@ -52,4 +55,32 @@ CONFIG_VALIDATE = CommandRequirements(
     required_services=FRAMEWORK_SERVICES,
     bootstrap_required=True,
     supports_json=True,
+)
+
+REPOSITORY_STATUS = CommandRequirements(
+    required_services=REPOSITORY_SERVICES,
+    bootstrap_required=True,
+    supports_json=True,
+    allow_degraded=True,
+)
+
+REPOSITORY_VALIDATE = CommandRequirements(
+    required_services=REPOSITORY_SERVICES,
+    bootstrap_required=True,
+    supports_json=True,
+    allow_degraded=True,
+)
+
+REPOSITORY_DOCS = CommandRequirements(
+    required_services=REPOSITORY_SERVICES,
+    bootstrap_required=True,
+    supports_json=True,
+    allow_degraded=True,
+)
+
+DOCTOR_COMMAND = CommandRequirements(
+    required_services=FRAMEWORK_SERVICES,
+    bootstrap_required=True,
+    supports_json=True,
+    allow_degraded=True,
 )
