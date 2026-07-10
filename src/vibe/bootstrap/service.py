@@ -15,11 +15,16 @@ from vibe.bootstrap.models import BootstrapResult
 from vibe.bootstrap.state import BootstrapState, transition
 from vibe.configuration.exceptions import ConfigurationError
 from vibe.configuration.service import ConfigurationService
+from vibe.lifecycle.exceptions import LifecycleShutdownError
+from vibe.lifecycle.manager import ServiceLifecycleManager
+from vibe.lifecycle.metadata import LifecycleServiceMetadata
+from vibe.lifecycle.state import ServiceLifecycleState
 from vibe.logging.exceptions import LoggingServiceError
 from vibe.logging.service import LoggingService
 from vibe.registry import (
     SERVICE_NAME_BOOTSTRAP,
     SERVICE_NAME_CONFIGURATION,
+    SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
@@ -36,6 +41,7 @@ class BootstrapService:
         configuration_service: ConfigurationService | None = None,
         logging_service: LoggingService | None = None,
         service_registry: ServiceRegistry | None = None,
+        lifecycle_manager: ServiceLifecycleManager | None = None,
         *,
         project_root: Path | None = None,
     ) -> None:
@@ -48,6 +54,8 @@ class BootstrapService:
                 Optional logging service instance for dependency injection.
             service_registry:
                 Optional service registry instance for dependency injection.
+            lifecycle_manager:
+                Optional lifecycle manager instance for dependency injection.
             project_root:
                 Optional project root used for service discovery.
         """
@@ -60,6 +68,7 @@ class BootstrapService:
             self._configuration_service,
             project_root=self._project_root,
         )
+        self._lifecycle_manager = lifecycle_manager
         self._state = BootstrapState.NOT_STARTED
         self._result: BootstrapResult | None = None
         self._lock = threading.RLock()
@@ -104,6 +113,7 @@ class BootstrapService:
                 logging_available = True
                 self._service_registry.set_logger(self._logging_service.get_logger("registry"))
                 self._register_platform_services()
+                self._initialize_lifecycle_manager()
                 self._emit_startup_diagnostics()
                 started_at = datetime.now(UTC)
                 self._result = BootstrapResult(
@@ -112,6 +122,7 @@ class BootstrapService:
                     configuration_service=self._configuration_service,
                     logging_service=self._logging_service,
                     service_registry=self._service_registry,
+                    lifecycle_manager=self._lifecycle_manager,
                 )
                 self._state = transition(self._state, BootstrapState.RUNNING)
                 return self._result
@@ -164,31 +175,44 @@ class BootstrapService:
                 logger = self._logging_service.get_logger("bootstrap")
                 logger.info("Bootstrap shutdown initiated")
 
-            if self._logging_service.is_initialized:
+            if self._lifecycle_manager is not None and self._lifecycle_manager.is_initialized:
                 try:
-                    self._logging_service.shutdown()
+                    self._lifecycle_manager.shutdown()
                     if logger is not None:
-                        logger.info("Logging service shutdown complete")
-                except Exception as exc:
+                        logger.info("Lifecycle manager shutdown complete")
+                except LifecycleShutdownError as exc:
                     shutdown_errors.append(exc)
                     if logger is not None:
                         logger.error(
-                            "Logging service shutdown failed",
+                            "Lifecycle manager shutdown failed",
                             error_type=type(exc).__name__,
                         )
+            else:
+                if self._logging_service.is_initialized:
+                    try:
+                        self._logging_service.shutdown()
+                        if logger is not None:
+                            logger.info("Logging service shutdown complete")
+                    except Exception as exc:
+                        shutdown_errors.append(exc)
+                        if logger is not None:
+                            logger.error(
+                                "Logging service shutdown failed",
+                                error_type=type(exc).__name__,
+                            )
 
-            if self._configuration_service.is_initialized:
-                try:
-                    self._configuration_service.shutdown()
-                    if logger is not None:
-                        logger.info("Configuration service shutdown complete")
-                except Exception as exc:
-                    shutdown_errors.append(exc)
-                    if logger is not None:
-                        logger.error(
-                            "Configuration service shutdown failed",
-                            error_type=type(exc).__name__,
-                        )
+                if self._configuration_service.is_initialized:
+                    try:
+                        self._configuration_service.shutdown()
+                        if logger is not None:
+                            logger.info("Configuration service shutdown complete")
+                    except Exception as exc:
+                        shutdown_errors.append(exc)
+                        if logger is not None:
+                            logger.error(
+                                "Configuration service shutdown failed",
+                                error_type=type(exc).__name__,
+                            )
 
             self._result = None
             if shutdown_errors:
@@ -267,6 +291,19 @@ class BootstrapService:
         self._require_running("Service Registry")
         return self._service_registry
 
+    @property
+    def lifecycle_manager(self) -> ServiceLifecycleManager:
+        """Return the managed lifecycle manager.
+
+        Raises:
+            BootstrapStateError:
+                When accessed before bootstrap has reached the running state.
+        """
+        self._require_running("Service Lifecycle Manager")
+        if self._lifecycle_manager is None:
+            raise BootstrapStateError("Service Lifecycle Manager is unavailable.")
+        return self._lifecycle_manager
+
     def _require_running(self, service_name: str) -> None:
         with self._lock:
             if self._state != BootstrapState.RUNNING:
@@ -344,12 +381,111 @@ class BootstrapService:
             ),
         )
 
+    def _initialize_lifecycle_manager(self) -> None:
+        if self._lifecycle_manager is None:
+            self._lifecycle_manager = ServiceLifecycleManager(
+                configuration_service=self._configuration_service,
+                logging_service=self._logging_service,
+                bootstrap_service=self,
+                service_registry=self._service_registry,
+            )
+
+        self._lifecycle_manager.initialize()
+        self._service_registry.register(
+            SERVICE_NAME_LIFECYCLE_MANAGER,
+            self._lifecycle_manager,
+            ServiceMetadata(
+                name=SERVICE_NAME_LIFECYCLE_MANAGER,
+                service_type="ServiceLifecycleManager",
+                package="vibe.lifecycle",
+                version=PLATFORM_VERSION,
+                description="Platform service lifecycle management",
+                dependencies=(
+                    SERVICE_NAME_CONFIGURATION,
+                    SERVICE_NAME_LOGGING,
+                    SERVICE_NAME_BOOTSTRAP,
+                    SERVICE_NAME_SERVICE_REGISTRY,
+                ),
+            ),
+        )
+        self._register_managed_services()
+        self._mark_managed_services_ready()
+
+    def _register_managed_services(self) -> None:
+        manager = self._lifecycle_manager
+        if manager is None:
+            raise BootstrapInitializationError("Lifecycle manager is unavailable.")
+
+        manager.register(
+            self._configuration_service,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_CONFIGURATION,
+                name="Configuration Service",
+                version=PLATFORM_VERSION,
+            ),
+        )
+        manager.register(
+            self._service_registry,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_SERVICE_REGISTRY,
+                name="Service Registry",
+                version=PLATFORM_VERSION,
+            ),
+        )
+        manager.register(
+            self._logging_service,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_LOGGING,
+                name="Logging Service",
+                version=PLATFORM_VERSION,
+                required_dependencies=(SERVICE_NAME_CONFIGURATION,),
+            ),
+        )
+        manager.register(
+            self,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_BOOTSTRAP,
+                name="Bootstrap Service",
+                version=PLATFORM_VERSION,
+                required_dependencies=(SERVICE_NAME_CONFIGURATION, SERVICE_NAME_LOGGING),
+            ),
+        )
+        manager.register(
+            manager,
+            LifecycleServiceMetadata(
+                service_id=SERVICE_NAME_LIFECYCLE_MANAGER,
+                name="Service Lifecycle Manager",
+                version=PLATFORM_VERSION,
+                required_dependencies=(
+                    SERVICE_NAME_CONFIGURATION,
+                    SERVICE_NAME_LOGGING,
+                    SERVICE_NAME_BOOTSTRAP,
+                    SERVICE_NAME_SERVICE_REGISTRY,
+                ),
+            ),
+        )
+
+    def _mark_managed_services_ready(self) -> None:
+        manager = self._lifecycle_manager
+        if manager is None:
+            raise BootstrapInitializationError("Lifecycle manager is unavailable.")
+
+        for service_id in (
+            SERVICE_NAME_CONFIGURATION,
+            SERVICE_NAME_SERVICE_REGISTRY,
+            SERVICE_NAME_LOGGING,
+            SERVICE_NAME_BOOTSTRAP,
+            SERVICE_NAME_LIFECYCLE_MANAGER,
+        ):
+            manager.transition(service_id, ServiceLifecycleState.READY)
+
     def _emit_startup_diagnostics(self) -> None:
         logger = self._logging_service.get_logger("bootstrap")
         logger.info("Bootstrap startup initiated")
         logger.info("Configuration service initialized")
         logger.info("Logging service initialized")
         logger.info("Platform services registered")
+        logger.info("Lifecycle management available")
         logger.info("Platform running")
 
     def _safe_shutdown_after_failure(self) -> None:

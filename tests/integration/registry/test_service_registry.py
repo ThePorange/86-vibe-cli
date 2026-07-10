@@ -10,6 +10,7 @@ from vibe.bootstrap.service import BootstrapService
 from vibe.registry import (
     SERVICE_NAME_BOOTSTRAP,
     SERVICE_NAME_CONFIGURATION,
+    SERVICE_NAME_LIFECYCLE_MANAGER,
     SERVICE_NAME_LOGGING,
     SERVICE_NAME_SERVICE_REGISTRY,
 )
@@ -23,7 +24,7 @@ def test_bootstrap_registers_platform_services(tmp_path: Path) -> None:
     result = service.initialize()
 
     registry = result.service_registry
-    assert registry.count == 4
+    assert registry.count == 5
     assert registry.get(SERVICE_NAME_CONFIGURATION) is service.configuration_service
     assert registry.get(SERVICE_NAME_LOGGING) is service.logging_service
     assert registry.get(SERVICE_NAME_BOOTSTRAP) is service
@@ -40,6 +41,7 @@ def test_registry_enumeration_after_bootstrap(tmp_path: Path) -> None:
     assert names == (
         SERVICE_NAME_BOOTSTRAP,
         SERVICE_NAME_CONFIGURATION,
+        SERVICE_NAME_LIFECYCLE_MANAGER,
         SERVICE_NAME_LOGGING,
         SERVICE_NAME_SERVICE_REGISTRY,
     )
@@ -76,7 +78,7 @@ def test_registry_state_after_shutdown(tmp_path: Path) -> None:
     registry = service.service_registry
     service.shutdown()
 
-    assert registry.count == 4
+    assert registry.count == 5
     assert registry.contains(SERVICE_NAME_BOOTSTRAP) is True
 
 

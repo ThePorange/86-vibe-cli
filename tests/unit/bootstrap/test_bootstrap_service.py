@@ -45,6 +45,10 @@ class FakeConfigurationService:
         self.calls.append("validate")
         return self.valid
 
+    def get_section(self, section: str) -> dict[str, object]:
+        self.calls.append(f"get_section:{section}")
+        return {}
+
     def shutdown(self) -> None:
         self.calls.append("shutdown")
         self.initialized = False
@@ -106,7 +110,7 @@ def test_successful_initialization_order() -> None:
     result = service.initialize()
 
     assert result.state == BootstrapState.RUNNING
-    assert configuration.calls == ["initialize", "load", "validate"]
+    assert configuration.calls == ["initialize", "load", "validate", "get_section:lifecycle"]
     assert logging.calls == ["initialize"]
     assert service.is_running is True
 
@@ -221,11 +225,14 @@ def test_service_accessors_require_running_state() -> None:
         _ = service.logging_service
     with pytest.raises(BootstrapStateError):
         _ = service.service_registry
+    with pytest.raises(BootstrapStateError):
+        _ = service.lifecycle_manager
 
     service.initialize()
     assert service.configuration_service is configuration
     assert service.logging_service is logging
-    assert service.service_registry.count == 4
+    assert service.service_registry.count == 5
+    assert service.lifecycle_manager.status().service_count == 5
 
 
 def test_bootstrap_alias_matches_initialize(tmp_path: Path) -> None:

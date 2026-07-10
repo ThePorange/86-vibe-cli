@@ -34,6 +34,7 @@ def test_integration_emits_startup_diagnostics(tmp_path: Path) -> None:
     assert "Configuration service initialized" in log_contents
     assert "Logging service initialized" in log_contents
     assert "Platform services registered" in log_contents
+    assert "Lifecycle management available" in log_contents
     assert "Platform running" in log_contents
 
 

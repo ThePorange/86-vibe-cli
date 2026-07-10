@@ -7,6 +7,7 @@ from datetime import datetime
 
 from vibe.bootstrap.state import BootstrapState
 from vibe.configuration.service import ConfigurationService
+from vibe.lifecycle.manager import ServiceLifecycleManager
 from vibe.logging.service import LoggingService
 from vibe.registry.service import ServiceRegistry
 
@@ -20,3 +21,4 @@ class BootstrapResult:
     configuration_service: ConfigurationService
     logging_service: LoggingService
     service_registry: ServiceRegistry
+    lifecycle_manager: ServiceLifecycleManager
