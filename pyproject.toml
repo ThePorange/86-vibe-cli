@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-86vibe = "vibe.cli.app:main"
+86vibe = "vibe.cli.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vibe"]
