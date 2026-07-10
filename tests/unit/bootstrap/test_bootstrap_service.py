@@ -219,10 +219,13 @@ def test_service_accessors_require_running_state() -> None:
         _ = service.configuration_service
     with pytest.raises(BootstrapStateError):
         _ = service.logging_service
+    with pytest.raises(BootstrapStateError):
+        _ = service.service_registry
 
     service.initialize()
     assert service.configuration_service is configuration
     assert service.logging_service is logging
+    assert service.service_registry.count == 4
 
 
 def test_bootstrap_alias_matches_initialize(tmp_path: Path) -> None:

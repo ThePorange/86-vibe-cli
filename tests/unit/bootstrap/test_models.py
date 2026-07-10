@@ -19,6 +19,7 @@ def test_bootstrap_result_is_immutable(tmp_path: Path) -> None:
     assert result.started_at.tzinfo is UTC
     assert result.configuration_service is service.configuration_service
     assert result.logging_service is service.logging_service
+    assert result.service_registry is service.service_registry
     service.shutdown()
 
     with pytest.raises(AttributeError):

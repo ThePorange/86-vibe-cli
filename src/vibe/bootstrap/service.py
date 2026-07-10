@@ -17,6 +17,15 @@ from vibe.configuration.exceptions import ConfigurationError
 from vibe.configuration.service import ConfigurationService
 from vibe.logging.exceptions import LoggingServiceError
 from vibe.logging.service import LoggingService
+from vibe.registry import (
+    SERVICE_NAME_BOOTSTRAP,
+    SERVICE_NAME_CONFIGURATION,
+    SERVICE_NAME_LOGGING,
+    SERVICE_NAME_SERVICE_REGISTRY,
+)
+from vibe.registry.metadata import ServiceMetadata
+from vibe.registry.service import ServiceRegistry
+from vibe.version import PLATFORM_VERSION
 
 
 class BootstrapService:
@@ -26,6 +35,7 @@ class BootstrapService:
         self,
         configuration_service: ConfigurationService | None = None,
         logging_service: LoggingService | None = None,
+        service_registry: ServiceRegistry | None = None,
         *,
         project_root: Path | None = None,
     ) -> None:
@@ -36,10 +46,13 @@ class BootstrapService:
                 Optional configuration service instance for dependency injection.
             logging_service:
                 Optional logging service instance for dependency injection.
+            service_registry:
+                Optional service registry instance for dependency injection.
             project_root:
                 Optional project root used for service discovery.
         """
         self._project_root = project_root or Path.cwd()
+        self._service_registry = service_registry or ServiceRegistry()
         self._configuration_service = configuration_service or ConfigurationService(
             project_root=self._project_root
         )
@@ -89,6 +102,8 @@ class BootstrapService:
                 self._initialize_configuration_service()
                 self._initialize_logging_service()
                 logging_available = True
+                self._service_registry.set_logger(self._logging_service.get_logger("registry"))
+                self._register_platform_services()
                 self._emit_startup_diagnostics()
                 started_at = datetime.now(UTC)
                 self._result = BootstrapResult(
@@ -96,6 +111,7 @@ class BootstrapService:
                     started_at=started_at,
                     configuration_service=self._configuration_service,
                     logging_service=self._logging_service,
+                    service_registry=self._service_registry,
                 )
                 self._state = transition(self._state, BootstrapState.RUNNING)
                 return self._result
@@ -240,6 +256,17 @@ class BootstrapService:
         self._require_running("Logging Service")
         return self._logging_service
 
+    @property
+    def service_registry(self) -> ServiceRegistry:
+        """Return the managed service registry.
+
+        Raises:
+            BootstrapStateError:
+                When accessed before bootstrap has reached the running state.
+        """
+        self._require_running("Service Registry")
+        return self._service_registry
+
     def _require_running(self, service_name: str) -> None:
         with self._lock:
             if self._state != BootstrapState.RUNNING:
@@ -268,11 +295,61 @@ class BootstrapService:
         except Exception as exc:
             raise BootstrapInitializationError("Failed to initialize Logging Service.") from exc
 
+    def _register_platform_services(self) -> None:
+        registry = self._service_registry
+        registry.register(
+            SERVICE_NAME_SERVICE_REGISTRY,
+            registry,
+            ServiceMetadata(
+                name=SERVICE_NAME_SERVICE_REGISTRY,
+                service_type="ServiceRegistry",
+                package="vibe.registry",
+                version=PLATFORM_VERSION,
+                description="Platform service registry",
+            ),
+        )
+        registry.register(
+            SERVICE_NAME_BOOTSTRAP,
+            self,
+            ServiceMetadata(
+                name=SERVICE_NAME_BOOTSTRAP,
+                service_type="BootstrapService",
+                package="vibe.bootstrap",
+                version=PLATFORM_VERSION,
+                description="Platform bootstrap orchestration",
+                dependencies=(SERVICE_NAME_CONFIGURATION, SERVICE_NAME_LOGGING),
+            ),
+        )
+        registry.register(
+            SERVICE_NAME_CONFIGURATION,
+            self._configuration_service,
+            ServiceMetadata(
+                name=SERVICE_NAME_CONFIGURATION,
+                service_type="ConfigurationService",
+                package="vibe.configuration",
+                version=PLATFORM_VERSION,
+                description="Platform configuration access",
+            ),
+        )
+        registry.register(
+            SERVICE_NAME_LOGGING,
+            self._logging_service,
+            ServiceMetadata(
+                name=SERVICE_NAME_LOGGING,
+                service_type="LoggingService",
+                package="vibe.logging",
+                version=PLATFORM_VERSION,
+                description="Platform logging",
+                dependencies=(SERVICE_NAME_CONFIGURATION,),
+            ),
+        )
+
     def _emit_startup_diagnostics(self) -> None:
         logger = self._logging_service.get_logger("bootstrap")
         logger.info("Bootstrap startup initiated")
         logger.info("Configuration service initialized")
         logger.info("Logging service initialized")
+        logger.info("Platform services registered")
         logger.info("Platform running")
 
     def _safe_shutdown_after_failure(self) -> None:

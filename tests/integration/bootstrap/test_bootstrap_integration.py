@@ -33,6 +33,7 @@ def test_integration_emits_startup_diagnostics(tmp_path: Path) -> None:
     assert "Bootstrap startup initiated" in log_contents
     assert "Configuration service initialized" in log_contents
     assert "Logging service initialized" in log_contents
+    assert "Platform services registered" in log_contents
     assert "Platform running" in log_contents
 
 

@@ -8,6 +8,7 @@ from datetime import datetime
 from vibe.bootstrap.state import BootstrapState
 from vibe.configuration.service import ConfigurationService
 from vibe.logging.service import LoggingService
+from vibe.registry.service import ServiceRegistry
 
 
 @dataclass(frozen=True)
@@ -18,3 +19,4 @@ class BootstrapResult:
     started_at: datetime
     configuration_service: ConfigurationService
     logging_service: LoggingService
+    service_registry: ServiceRegistry
